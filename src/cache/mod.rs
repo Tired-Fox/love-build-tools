@@ -1,5 +1,5 @@
 mod lock;
-use std::{collections::BTreeMap, path::Path};
+use std::{borrow::Cow, collections::BTreeMap, path::Path};
 
 use lock::Lock;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub struct Addon {
 #[derive(Debug)]
 pub struct Addons {
     pub(crate) lock: Lock,
-    pub(crate) addons: BTreeMap<String, Addon>
+    pub(crate) addons: BTreeMap<Cow<'static, str>, Addon>
 }
 
 impl Addons {
@@ -33,7 +33,7 @@ impl Addons {
         let lock = Lock::detect(dir, &branch).await?;
 
         // If cache is missing or versions are different between
-        let addons = if !cache_dir.join(CACHE_FILE_NAME).exists() || branch.commit.sha.as_str() != lock.lls_addon.as_ref() {
+        let addons = if !cache_dir.join(CACHE_FILE_NAME).exists() || !branch.commit.sha.starts_with(lock.lls_addon.as_ref()) {
             Self::generate(&cache_dir, branch.commit.sha.as_str(), client).await?
         } else {
             let bytes = std::fs::read(cache_dir.join(CACHE_FILE_NAME))?;
@@ -47,12 +47,14 @@ impl Addons {
         })
     }
 
-    pub async fn generate(path: &Path, sha: &str, client: &Client) -> Result<BTreeMap<String, Addon>, Error> {
-        // TODO: Add progress bars and output information so the user knows that it is grabbing the
-        // latest changes
+    async fn generate(path: &Path, sha: &str, client: &Client) -> Result<BTreeMap<Cow<'static, str>, Addon>, Error> {
+        log::info!("updating cache");
         std::fs::create_dir_all(path)?;
 
         let mut addons = BTreeMap::new();
+        log::debug!("fetching LuaLS/LLS_Addons repository `main` branch's tree");
+        // TODO: Add progress bars and output information so the user knows that it is grabbing the
+        // latest changes
         for addon in client.tree(LUA_LS, LLS_ADDONS, "main", Some(sha)).await?.iter().filter(|e| e.path.starts_with("addons/") && e.path.ends_with("info.json")) {
             let name = addon.path.parent().unwrap().strip_prefix("addons/").unwrap().display().to_string();
 

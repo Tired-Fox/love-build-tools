@@ -48,18 +48,22 @@ impl Lock {
                         .output()?;
 
                     if output.status.success() {
-                        let sha = String::from_utf8(output.stdout).unwrap().trim().to_string();
+                        let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
                         if !sha.is_empty() {
                             addons.insert(entry.path().file_stem().unwrap().to_str().unwrap().to_string().into(), sha.into());
                             continue;
                         }
                     }
 
-                    //std::fs::remove_dir(entry.path())?;
-                    println!("Remove invalid addon: {}", entry.path().display());
+                    log::error!("checksum couldn't be retrieve for path: {}", entry.path().display());
+                    if !output.stderr.is_empty() {
+                        log::error!("{}", String::from_utf8_lossy(&output.stderr));
+                    }
                 } else if entry.path().is_dir() {
+                    log::warn!("removing invalid addon: {}", entry.path().display());
                     std::fs::remove_dir_all(entry.path())?;
                 } else if entry.path().is_file() {
+                    log::warn!("removing invalid addon: {}", entry.path().display());
                     std::fs::remove_file(entry.path())?;
                 }
             }
@@ -76,6 +80,7 @@ impl Lock {
             std::fs::create_dir_all(dir)?;
         }
 
+        log::debug!("creating lockfile {}", dir.join(LOCK_FILE_NAME).display());
         std::fs::write(dir.join(LOCK_FILE_NAME), serde_json::to_string_pretty(&lock)?)?;
 
         Ok(lock)
