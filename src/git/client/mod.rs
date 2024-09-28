@@ -23,18 +23,29 @@ static ACCEPT_OBJECT: &str = "application/vnd.github.object+json";
 static ACCEPT_RAW: &str = "application/vnd.github.raw+json";
 static ACCEPT_HTML: &str = "application/vnd.github.html+json";
 
-#[derive(Debug, Default)]
-pub struct Client(String);
+#[derive(Default)]
+pub struct Client {
+    user_agent: String
+}
+
+impl std::fmt::Debug for Client {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Client")
+    }
+}
+
 impl Client {
     pub fn new(user_agent: impl AsRef<str>) -> Self {
-        Self(user_agent.as_ref().to_string())
+        Self {
+            user_agent: user_agent.as_ref().to_string()
+        }
     }
 
     fn get(&self, url: impl IntoUrl) -> reqwest::RequestBuilder {
         reqwest::Client::new()
             .get(url)
             .header("X-GitHub-Api-Version", GITHUB_API_VERSION)
-            .header("User-Agent", &self.0)
+            .header("User-Agent", &self.user_agent)
     }
 
     pub async fn tree<S: Display>(&self, owner: impl Display, repo: impl Display, branch: impl Display, sha: Option<S>) -> Result<Tree, Error> {

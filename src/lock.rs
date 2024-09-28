@@ -2,31 +2,51 @@ use std::{borrow::Cow, collections::BTreeMap, path::{Path, PathBuf}};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{git::client::branch::Branch, Error};
-
-static LOCK_FILE_NAME: &str = ".llam.lock";
+use crate::{Addon, Error, ADDONS_DIR, LOCK_FILE_NAME};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Lock {
+pub struct LockFile {
     #[serde(skip)]
     pub(crate) path: PathBuf,
 
-    pub(crate) lls_addon: Cow<'static, str>,
-    pub(crate) addons: BTreeMap<Cow<'static, str>, Cow<'static, str>>
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) addons: BTreeMap<Cow<'static, str>, Addon>
 }
 
-impl Lock {
-    pub async fn detect(dir: impl AsRef<Path>, branch: &Branch) -> Result<Self, Error> {
+impl LockFile {
+    pub fn detect(dir: impl AsRef<Path>) -> Result<Self, Error> {
         let dir = dir.as_ref();
 
         if dir.join(LOCK_FILE_NAME).exists() {
-            Self::read(&dir.join(LOCK_FILE_NAME)).await
+            Self::read(&dir.join(LOCK_FILE_NAME))
         } else {
-            Self::new(dir, branch).await
+            Self::new(dir)
         }
     }
 
-    async fn read(file: &Path) -> Result<Self, Error> {
+    pub fn update(&mut self, addon: &Addon) -> Result<bool, Error> {
+        let name = addon.name();
+        Ok(if let std::collections::btree_map::Entry::Vacant(e) = self.addons.entry(name.clone()) {
+            e.insert(addon.clone());
+            true
+        } else {
+            self.addons.get_mut(&name).unwrap().merge(&addon)
+        })
+    }
+
+    pub fn set(&mut self, name: Cow<'static, str>, addon: Addon) {
+        self.addons.insert(name, addon);
+    }
+
+    pub fn contains(&mut self, name: &str) -> bool {
+        self.addons.contains_key(name)
+    }
+
+    fn write(&self) -> Result<(), Error> {
+        Ok(std::fs::write(&self.path, serde_json::to_string_pretty(self)?)?)
+    }
+
+    fn read(file: &Path) -> Result<Self, Error> {
         let bytes = std::fs::read(file)?;
         let mut lock: Self = serde_json::from_slice(&bytes)?;
 
@@ -35,11 +55,13 @@ impl Lock {
         Ok(lock)
     }
 
-    async fn new(dir: &Path, branch: &Branch) -> Result<Self, Error> {
+    fn new(dir: &Path) -> Result<Self, Error> {
         // Attempt to read sha1 from cloned addon repositories
         let mut addons = BTreeMap::default();
-        if dir.exists() {
-            for entry in (std::fs::read_dir(dir)?).flatten() {
+
+        let _addons = dir.join(ADDONS_DIR);
+        if _addons.exists() {
+            for entry in (std::fs::read_dir(_addons)?).flatten() {
                 if entry.path().join(".git").exists()
                     && entry.path().join("config.json").exists()
                 {
@@ -50,7 +72,11 @@ impl Lock {
                     if output.status.success() {
                         let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
                         if !sha.is_empty() {
-                            addons.insert(entry.path().file_stem().unwrap().to_str().unwrap().to_string().into(), sha.into());
+                            let name = entry.path().file_stem().unwrap().to_string_lossy().to_string();
+                            addons.insert(
+                                name.clone().into(),
+                                Addon::cats(name, Some(sha), None)
+                            );
                             continue;
                         }
                     }
@@ -71,11 +97,10 @@ impl Lock {
 
         let lock = Self {
             path: dir.join(LOCK_FILE_NAME),
-
-            lls_addon: branch.commit.sha.clone().into(),
             addons
         };
 
+        // TODO: Create error instead
         if !dir.exists() {
             std::fs::create_dir_all(dir)?;
         }
