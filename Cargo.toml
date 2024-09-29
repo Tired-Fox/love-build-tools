@@ -1,18 +1,6 @@
 [package]
-name = "llam"
-version = "0.0.1"
+name = "love-build-tools"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bytes = "1.7.2"
-clap = { version = "4.5.18", features = ["derive"] }
-dirs = "5.0.1"
-futures-util = "0.3.30"
-indoc = "2.0.5"
-log = "0.4.22"
-reqwest = { version = "0.12.7", features = ["json", "stream"] }
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = "1.0.128"
-serde_path_to_error = "0.1.16"
-tokio = { version = "1.40.0", features = ["macros", "rt-multi-thread"] }
-uuid = { version = "1.10.0", features = ["v7"] }
