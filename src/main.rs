@@ -1,7 +1,5 @@
-use std::str::FromStr;
-
 use clap::Parser;
-use lbt::{build::Builder, config::{Config, Target}, git, Version};
+use lbt::{build::Builder, config::{Config, Target}, git};
 
 #[derive(Parser)]
 pub struct LBT {
@@ -15,72 +13,6 @@ pub enum Subcommand {
     Run,
 }
 
-#[derive(Debug, Clone)]
-pub enum Package {
-    Love { version: Option<Version> },
-    Lovr { version: Option<Version> },
-}
-
-impl Package {
-    pub fn owner(&self) -> &str {
-        match self {
-            Self::Love { .. } => "love2d",
-            Self::Lovr { .. } => "bjornbytes",
-        }
-    }
-
-    pub fn repo(&self) -> &str {
-        match self {
-            Self::Love { .. } => "love",
-            Self::Lovr { .. } => "lovr",
-        }
-    }
-
-    pub fn tag(&self) -> String {
-        let version = match self {
-            Self::Love { version } => version.as_ref(),
-            Self::Lovr { version } => version.as_ref(),
-        };
-
-        match version {
-            Some(version) => format!("{}", version),
-            None => String::from("latest"),
-        }
-    }
-}
-
-impl FromStr for Package {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (name, version) = if s.contains('@') {
-            s.split_once('@').unwrap()
-        } else {
-            (s, "latest")
-        };
-
-        let version = match version {
-            "latest" => None,
-            other => Some(Version::from_str(other)?),
-        };
-
-        match name {
-            "love" => Ok(Self::Love { version }),
-            "lovr" => Ok(Self::Lovr { version }),
-            _ => Err("expected love or lovr".to_string()),
-        }
-    }
-}
-
-#[derive(clap::Args)]
-//#[group(multiple = false, required = true)]
-pub struct Install {
-    #[arg(long, short)]
-    list: bool,
-    /// Install a version of love or lovr
-    package: Package,
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let client = git::Client::new("love-build-tools");
@@ -92,8 +24,6 @@ async fn main() -> anyhow::Result<()> {
     match LBT::parse().command {
         Subcommand::Build => {
             for (framework, build) in config.build.iter() {
-                println!("{framework:?} {} {}/{}", build.version, framework.owner(), framework.repo());
-
                 Builder::new(framework, build, &config)
                     .bundle(&client)
                     .await?;

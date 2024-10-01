@@ -32,3 +32,29 @@ impl SpinnerPrint for Spinner {
         *self = Spinner::new(spinners::Dots, msg.to_string(), Color::Yellow);
     }
 }
+
+pub trait SpinnerError<T> {
+    fn ok_or_spin(self, spinner: &mut Spinner, msg: impl std::fmt::Display) -> Option<T>;
+    fn log_err_in_spin(self, spinner: &mut Spinner, msg: impl std::fmt::Display) -> Self;
+}
+
+impl<T, E: std::fmt::Display> SpinnerError<T> for Result<T, E> {
+    fn ok_or_spin(self, spinner: &mut Spinner, msg: impl std::fmt::Display) -> Option<T> {
+        match self {
+            Ok(v) => Some(v),
+            Err(err) => {
+                spinner.fail(format!("{msg}\n  {err}").as_str()); 
+                *spinner = Spinner::new(spinners::Dots, msg.to_string(), Color::Yellow);
+                None
+            }
+        }
+    }
+
+    fn log_err_in_spin(self, spinner: &mut Spinner, msg: impl std::fmt::Display) -> Self {
+        if let Err(err) = self.as_ref() {
+            spinner.fail(format!("{msg}\n  {err}").as_str()); 
+            *spinner = Spinner::new(spinners::Dots, msg.to_string(), Color::Yellow);
+        }
+        self
+    }
+}

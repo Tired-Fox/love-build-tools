@@ -4,7 +4,7 @@ use regex::Regex;
 use serde::Deserialize;
 use spinoff::{spinners, Color, Spinner};
 
-use crate::{SpinnerPrint, Version, DATA};
+use crate::{SpinnerError, SpinnerPrint, Version, DATA};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Asset {
@@ -67,27 +67,39 @@ pub struct Release {
 
 impl Release {
     pub fn get_platform_asset(&self) -> Option<&Asset> {
-        self.assets
-            .iter()
-            .find(|v| {
-                #[cfg(target_os = "windows")]
-                { v.name.ty.is_win_64() }
-                #[cfg(target_os = "macos")]
-                { v.name.ty.is_macos() }
-                #[cfg(target_os = "linux")]
-                { v.name.ty.is_linux() }
-                #[cfg(target_os = "android")]
-                { v.name.ty.is_android() }
-                #[cfg(target_os = "ios")]
-                { v.name.ty.is_ios() }
-            })
+        self.assets.iter().find(|v| {
+            #[cfg(target_os = "windows")]
+            {
+                v.name.ty.is_win_64()
+            }
+            #[cfg(target_os = "macos")]
+            {
+                v.name.ty.is_macos()
+            }
+            #[cfg(target_os = "linux")]
+            {
+                v.name.ty.is_linux()
+            }
+            #[cfg(target_os = "android")]
+            {
+                v.name.ty.is_android()
+            }
+            #[cfg(target_os = "ios")]
+            {
+                v.name.ty.is_ios()
+            }
+        })
     }
 
-    pub async fn install(&self, base_name: impl AsRef<str>) -> anyhow::Result<()> {
+    pub async fn install(
+        &self,
+        base_name: impl AsRef<str>,
+        spinner: &mut Spinner,
+    ) -> anyhow::Result<()> {
         match self.get_platform_asset() {
             Some(asset) => {
-                let mut spinner = Spinner::new(spinners::Dots, "", Color::Yellow);
                 let base = DATA.join(std::env::consts::OS);
+                let mut work_done = false;
 
                 let name = base_name.as_ref();
                 let zip_name = asset.name.name.clone();
@@ -97,31 +109,67 @@ impl Release {
                 let zip_file = archive_path.join(&zip_name);
 
                 if !archive_path.exists() {
-                    std::fs::create_dir_all(archive_path)?;
+                    std::fs::create_dir_all(&archive_path).log_err_in_spin(
+                        spinner,
+                        format!("failed to create directory {}", archive_path.display()),
+                    )?;
                 }
 
                 if !zip_file.exists() {
-                    spinner.update_text(format!("installing `{}` for {}", base_name.as_ref(), std::env::consts::OS));
-                    let response = reqwest::get(asset.browser_download_url.as_str()).await?;
-                    let content = response.bytes().await?;
+                    work_done = true;
+                    spinner.update_text(format!(
+                        "installing `{}` for {}",
+                        base_name.as_ref(),
+                        std::env::consts::OS
+                    ));
+                    let response = reqwest::get(asset.browser_download_url.as_str())
+                        .await
+                        .log_err_in_spin(spinner, "failed to download release")?;
 
-                    std::fs::write(&zip_file, &content)?;
+                    let content = response
+                        .bytes()
+                        .await
+                        .log_err_in_spin(spinner, "failed to read download as bytes")?;
+
+                    std::fs::write(&zip_file, &content)
+                        .log_err_in_spin(spinner, "failed to write download to disk")?;
                 }
 
                 if base.join(&version_file).exists() {
-                    let version = Version::from_str(std::fs::read_to_string(base.join(&version_file))?.trim()).map_err(|e| anyhow::anyhow!("{}", e))?;
+                    let version = Version::from_str(
+                        std::fs::read_to_string(base.join(&version_file))
+                            .log_err_in_spin(
+                                spinner,
+                                format!(
+                                    "failed to read file {}",
+                                    base.join(&version_file).display()
+                                ),
+                            )?
+                            .trim(),
+                    )
+                    .map_err(|e| anyhow::anyhow!("{}", e))?;
                     if version == self.tag {
-                        spinner.success(format!("Installed {} {}", name, self.tag).as_str());
-                        return Ok(())
+                        if work_done {
+                            spinner.success(format!("Installed {} {}", name, self.tag).as_str());
+                            *spinner = Spinner::new(spinners::Dots, format!("Installed {} {}", name, self.tag), Color::Yellow);
+                        }
+                        return Ok(());
                     } else {
-                        std::fs::write(base.join(&version_file), self.tag.to_string())?;
+                        std::fs::write(base.join(&version_file), self.tag.to_string())
+                            .log_err_in_spin(spinner, "failed to save installed version")?;
                     }
                 } else {
-                    std::fs::write(base.join(&version_file), self.tag.to_string())?;
+                    std::fs::write(base.join(&version_file), self.tag.to_string())
+                        .log_err_in_spin(spinner, "failed to save installed version")?;
                 }
 
-                if  zip_name.ends_with(".zip") {
-                    spinner.update_text(format!("unzipping `{}` for {}", base_name.as_ref(), std::env::consts::OS));
+                if zip_name.ends_with(".zip") {
+                    work_done = true;
+                    spinner.update_text(format!(
+                        "unzipping `{}` for {}",
+                        base_name.as_ref(),
+                        std::env::consts::OS
+                    ));
 
                     let zf = File::open(&zip_file)?;
                     let mut archive = zip::ZipArchive::new(&zf)?;
@@ -143,13 +191,31 @@ impl Release {
                         };
 
                         if file.name().ends_with('/') {
-                            std::fs::create_dir_all(base.join(outpath.file_name().unwrap()))?; // Create the directory.
+                            std::fs::create_dir_all(base.join(outpath.file_name().unwrap()))
+                                .log_err_in_spin(
+                                    spinner,
+                                    format!(
+                                        "failed to create directory {}",
+                                        base.join(outpath.file_name().unwrap()).display()
+                                    ),
+                                )?; // Create the directory.
                         } else {
-                            spinner.print(format!(" └ unsipped file {}", outpath.display()));
+                            spinner.print(format!(" └ unzipped file {}", outpath.display()));
 
                             // Create and copy the file contents to the output path.
-                            let mut outfile = File::create(base.join(outpath.file_name().unwrap()))?;
-                            std::io::copy(&mut file, &mut outfile)?;
+                            let mut outfile = File::create(base.join(outpath.file_name().unwrap()))
+                                .log_err_in_spin(
+                                    spinner,
+                                    format!(
+                                        "failed to create file {}",
+                                        base.join(outpath.file_name().unwrap()).display()
+                                    ),
+                                )?;
+
+                            std::io::copy(&mut file, &mut outfile).log_err_in_spin(
+                                spinner,
+                                format!("failed to unzip file {}", outpath.display()),
+                            )?;
                         }
 
                         // Set file permissions if running on a Unix-like system.
@@ -158,19 +224,39 @@ impl Release {
                             use std::os::unix::fs::PermissionsExt;
 
                             if let Some(mode) = file.unix_mode() {
-                                std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))?;
+                                std::fs::set_permissions(
+                                    &outpath,
+                                    std::fs::Permissions::from_mode(mode),
+                                )
+                                .ok_or_spin(spinner, "failed to copy file permissions");
                             }
                         }
                     }
                 } else if zip_name.ends_with(".AppImage") {
-                    std::fs::rename(&zip_file, zip_file.with_file_name(format!("{}.AppImage", name)))?;
+                    work_done = true;
+                    std::fs::rename(
+                        &zip_file,
+                        zip_file.with_file_name(format!("{}.AppImage", name)),
+                    )
+                    .log_err_in_spin(spinner, "failed to rename AppImage")?;
                 }
 
-                spinner.success(format!("Installed {} {}", name, self.tag).as_str());
-            },
-            None => return Err(anyhow::anyhow!("no download for current target os: {}", std::env::consts::OS))
+                if work_done {
+                    spinner.success(format!("Installed {} {}", name, self.tag).as_str());
+                    *spinner = Spinner::new(
+                        spinners::Dots,
+                        format!("Installed {} {}", name, self.tag),
+                        Color::Yellow,
+                    );
+                }
+            }
+            None => {
+                return Err(anyhow::anyhow!(
+                    "no download for current target os: {}",
+                    std::env::consts::OS
+                ))
+            }
         }
-
 
         Ok(())
     }
@@ -211,9 +297,9 @@ impl FromStr for AssetName {
 
         let asset_type = match targeted.captures(s) {
             Some(captures) => match captures.name("os").as_ref().map(|v| v.as_str()) {
-                Some("android"|"apk") => AssetType::Android,
+                Some("android" | "apk") => AssetType::Android,
                 Some("ios") => AssetType::Ios,
-                Some("macos"|"app") => AssetType::Macos,
+                Some("macos" | "app") => AssetType::Macos,
                 Some("x86_64") => AssetType::Linux,
                 Some("win64") => AssetType::Win64,
                 Some(other) => return Err(format!("unknown asset os: {other}")),

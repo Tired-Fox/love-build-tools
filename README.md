@@ -17,12 +17,12 @@ The goal is not to add more on top of `love` but instead make it's workflow easi
 
 ## TODO
 
-- Run command
-- Include specific libs
-- Cross platform compilation
-- Custom icons
-- Spinners while building
-- Better error handling
+- [x] Run command
+- [ ] Include specific libs
+- [ ] Cross platform compilation
+- [ ] Custom icons
+- [ ] Spinners while building
+- [ ] Better error handling
 
 ___
 

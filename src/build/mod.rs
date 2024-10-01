@@ -1,9 +1,14 @@
-use std::path::{Path, PathBuf};
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
+use spinoff::{spinners, Color, Spinner};
 use zip::write::SimpleFileOptions;
 
-use crate::{config::{Build, Config, Framework, Target}, git::Client};
+use crate::{
+    config::{Build, Config, Framework, Target},
+    git::Client,
+};
+use crate::SpinnerError;
 
 //      Ensure framework is installed for the specific version and target
 //      Copy needed files to build directory
@@ -20,7 +25,7 @@ pub struct Builder<'conf> {
     root: PathBuf,
     config: &'conf Config,
     framework: &'conf Framework,
-    build: &'conf Build
+    build: &'conf Build,
 }
 
 impl<'conf> Builder<'conf> {
@@ -29,10 +34,10 @@ impl<'conf> Builder<'conf> {
             root: std::env::current_dir().unwrap(),
             framework,
             build,
-            config
+            config,
         }
     }
-    
+
     pub async fn bundle(&self, client: &Client) -> anyhow::Result<()> {
         let targets = if self.build.targets.is_empty() {
             &[Target::default()]
@@ -41,35 +46,97 @@ impl<'conf> Builder<'conf> {
         };
 
         for target in targets {
-            println!("[{target}]");
-            self.ensure_framework_installed(client).await?;
-            let target_dir = self.output_dir(*target)?;
-            self.copy_files(*target, &target_dir)?;
-            self.build_executable(*target, &target_dir)?;
-            self.package(*target, &target_dir)?;
+            let mut spinner = Spinner::new(spinners::Dots, "[{target}]", Color::Yellow);
+            let tag = format!("[{}:{target}]", self.framework);
+            let mut fail = false;
+
+            spinner.update_text(format!("{tag} installing {}", self.framework));
+            if self.ensure_framework_installed(client, &mut spinner)
+                .await
+                .ok_or_spin(
+                    &mut spinner,
+                    format!("[{target}] failed to install {}", self.framework),
+                ).is_none()
+            {
+                fail = true;
+            }
+
+            spinner.update_text(format!("{tag} creating output directory"));
+            let target_dir = match self.output_dir(*target).ok_or_spin(
+                &mut spinner,
+                format!("[{target}] failed to create output directory"),
+            ) {
+                Some(td) => td,
+                None => continue,
+            };
+
+            spinner.update_text(format!("{tag} copying dynamic libraries"));
+            if self.copy_files(*target, &target_dir)
+                .ok_or_spin(&mut spinner, format!("{tag} failed to copy dynamic libraries"))
+                .is_none()
+            {
+                fail = true;
+            }
+
+            spinner.update_text(format!("{tag} compressing source and building executable"));
+            if self.build_executable(*target, &target_dir)
+                .ok_or_spin(&mut spinner, format!("{tag} failed to build executable"))
+                .is_none()
+            {
+                fail = true;
+            }
+
+            spinner.update_text(format!("{tag} packaging the executable and it's libraries"));
+            if self.package(*target, &target_dir)
+                .ok_or_spin(&mut spinner, format!("{tag} failed to package final build"))
+                .is_none()
+            {
+                fail = true
+            }
+
+            if fail {
+                spinner.fail(format!("{tag} Build failed").as_str());
+            } else {
+                spinner.success(format!("{tag} Build finished").as_str());
+            }
         }
 
         Ok(())
     }
 
-    pub async fn ensure_framework_installed(&self, client: &Client) -> anyhow::Result<()> {
+    pub async fn ensure_framework_installed(&self, client: &Client, spinner: &mut Spinner) -> anyhow::Result<()> {
         // PERF: Caching / Auth / Parse from html
-        let releases = client.releases(self.framework.owner(), self.framework.repo()).await?;
+        let releases = client
+            .releases(self.framework.owner(), self.framework.repo())
+            .await?;
 
         if self.build.version < self.framework.min_version() {
-            return Err(anyhow::anyhow!("minimum supported love version is {}", self.framework.min_version()))
+            return Err(anyhow::anyhow!(
+                "minimum supported love version is {}",
+                self.framework.min_version()
+            ));
         }
 
         let release = match releases.iter().find(|r| r.tag == self.build.version) {
             Some(release) => release,
-            None => return Err(anyhow::anyhow!("release version {} for {} was not found", self.build.version, self.framework))
+            None => {
+                return Err(anyhow::anyhow!(
+                    "release version {} for {} was not found",
+                    self.build.version,
+                    self.framework
+                ))
+            }
         };
 
-        release.install(self.framework.to_string()).await
+        release.install(self.framework.to_string(), spinner).await
     }
 
     pub fn output_dir(&self, target: Target) -> anyhow::Result<PathBuf> {
-        let target_dir = self.root.join("build").join(self.framework.to_string()).join(target.to_string());
+        let target_dir = self
+            .root
+            .join("build")
+            .join(self.framework.to_string())
+            .join(target.to_string());
 
         if target_dir.exists() {
             std::fs::remove_dir_all(&target_dir)?;
@@ -85,6 +152,7 @@ impl<'conf> Builder<'conf> {
                 std::fs::copy(entry.path(), dest.join(entry.path().file_name().unwrap()))?;
             }
         }
+
         Ok(())
     }
 
@@ -94,25 +162,16 @@ impl<'conf> Builder<'conf> {
         // Build based on target
         match target {
             Target::Win64 => {
-                // TODO:
-                //   1. Compress lua-files and assets
-
                 let mut archive = Archive::new(self.root.join("src"), dest.join(&compressed))?;
                 archive.add_dir(&self.root.join("src"), true)?;
                 archive.finish()?;
 
-                //   2. Append compress file bytes to end of love/lovr.exe
                 std::fs::copy(self.framework.exe(target), &exe)?;
 
-                let mut out = std::fs::OpenOptions::new()
-                    .append(true)
-                    .open(&exe)?;
+                let mut out = std::fs::OpenOptions::new().append(true).open(&exe)?;
                 out.write_all(&std::fs::read(dest.join(&compressed))?)?;
-
-                // PERF: Should the compressed file be removed?
-                std::fs::remove_file(dest.join(&compressed))?;
-            },
-            _ => unimplemented!()
+            }
+            _ => unimplemented!(),
         }
 
         self.apply_customizations(target, dest)?;
@@ -120,17 +179,18 @@ impl<'conf> Builder<'conf> {
         Ok(())
     }
 
-    pub fn apply_customizations(&self, target: Target, dest: &Path) -> anyhow::Result<()> {
+    pub fn apply_customizations(&self, target: Target, _dest: &Path) -> anyhow::Result<()> {
         // TODO: If custom icon then apply that to executable
         match target {
-            Target::Win64 => {
+            // Can only manipulate icon when on windows
+            Target::Win64 if std::env::consts::OS == "windows" => {
                 // TODO: Use win32 api to update exe ico
                 // - https://stackoverflow.com/q/67691200
                 // - Image png to ico: https://docs.rs/ico/latest/ico/
                 //      - or https://docs.rs/image/latest/image/index.html to allow it to
                 //      automatically convert the icon file from more formats
             }
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
 
         Ok(())
@@ -139,11 +199,12 @@ impl<'conf> Builder<'conf> {
     pub fn package(&self, target: Target, dest: &Path) -> anyhow::Result<()> {
         match target {
             Target::Win64 => {
-                let mut archive = Archive::new(dest, dest.join(format!("{}.zip", self.config.project.name)))?;
+                let mut archive =
+                    Archive::new(dest, dest.join(format!("{}.zip", self.config.project.name)))?;
                 archive.add_dir(dest, false)?;
                 archive.finish()?;
-            },
-            _ => unimplemented!()
+            }
+            _ => unimplemented!(),
         }
 
         Ok(())
@@ -162,11 +223,13 @@ impl Archive {
         let mut archive = Self {
             prefix: prefix.as_ref().to_path_buf(),
             archive: path.as_ref().to_path_buf(),
-            writer: zip::ZipWriter::new(std::fs::OpenOptions::new()
-                .create(true)
-                .truncate(true)
-                .write(true)
-                .open(path)?),
+            writer: zip::ZipWriter::new(
+                std::fs::OpenOptions::new()
+                    .create(true)
+                    .truncate(true)
+                    .write(true)
+                    .open(path)?,
+            ),
             compression: SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Deflated)
                 .unix_permissions(0o755),
@@ -182,7 +245,6 @@ impl Archive {
             .map(str::to_owned)
             .ok_or(anyhow::anyhow!("{name:?} Is a Non UTF-8 Path"))?;
 
-        println!("adding file {file:?} as {name:?} ...");
         self.writer.start_file(path_as_string, self.compression)?;
         self.writer.write_all(&std::fs::read(file)?)?;
         Ok(())
@@ -191,7 +253,7 @@ impl Archive {
     pub fn add_dir(&mut self, dir: &Path, recursive: bool) -> anyhow::Result<()> {
         for entry in std::fs::read_dir(dir)?.flatten() {
             if entry.path() == self.archive {
-                continue
+                continue;
             }
 
             let path = entry.path();
@@ -208,8 +270,8 @@ impl Archive {
             } else if !name.as_os_str().is_empty() {
                 // Only if not root! Avoids path spec / warning
                 // and mapname conversion failed error on unzip
-                println!("adding dir {path_as_string:?} as {name:?} ...");
-                self.writer.add_directory(path_as_string, self.compression)?;
+                self.writer
+                    .add_directory(path_as_string, self.compression)?;
                 if recursive {
                     self.add_dir(&path, recursive)?;
                 }
