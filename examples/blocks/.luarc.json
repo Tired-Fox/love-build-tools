@@ -1,0 +1,17 @@
+{
+  "workspace": {
+    "userThirdParty": [
+      ".addons"
+    ],
+    "addons": {
+      "love2d": {
+        "src": "love2d",
+        "target": "lua_cats"
+      },
+      "lovr": {
+        "src": "lovr",
+        "target": "lua_cats"
+      }
+    }
+  }
+}

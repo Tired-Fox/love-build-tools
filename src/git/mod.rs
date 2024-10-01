@@ -4,7 +4,7 @@ use reqwest::{IntoUrl, RequestBuilder};
 
 mod release;
 
-pub use release::{ Release, Author, Asset, AssetName, AssetType, Version };
+pub use release::{ Release, Author, Asset, AssetName, AssetType };
 
 pub struct Client {
     user_agent: String

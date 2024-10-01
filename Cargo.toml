@@ -15,4 +15,5 @@ serde_json = "1.0.128"
 spinoff = "0.8.0"
 strum = { version = "0.26.3", features = ["strum_macros", "derive"] }
 tokio = { version = "1.40.0", features = ["macros", "rt-multi-thread"] }
+toml = "0.8.19"
 zip = "2.2.0"

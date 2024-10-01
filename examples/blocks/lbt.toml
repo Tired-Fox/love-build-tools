@@ -1,0 +1,10 @@
+[project]
+name = "Blocks"
+icon = "Blocks.png"
+
+[build.love]
+version = "11.5"
+# targets = ["win64"]
+
+[target.win64]
+icon = "Blocks.ico"

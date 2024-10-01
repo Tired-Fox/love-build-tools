@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use clap::Parser;
-use lbt::git::{self, Version};
+use lbt::{build::Builder, config::{Config, Target}, git, Version};
 
 #[derive(Parser)]
 pub struct LBT {
@@ -11,7 +11,6 @@ pub struct LBT {
 
 #[derive(clap::Subcommand)]
 pub enum Subcommand {
-    Install(Install),
     Build,
     Run,
 }
@@ -86,64 +85,30 @@ pub struct Install {
 async fn main() -> anyhow::Result<()> {
     let client = git::Client::new("love-build-tools");
 
+    let config = Config::parse_or_default()?;
+
     // TODO: Convert from install command to pull from a config
     #[allow(clippy::single_match)]
     match LBT::parse().command {
-        Subcommand::Install(Install { list, package }) => {
-            match package {
-                Package::Love { version } => {
-                    let releases = client.releases("love2d", "love").await?;
-                    if list {
-                        println!("Love Versions");
-                        for version in releases.iter().map(|r| format!("{}", r.tag)) {
-                            println!(" - {version}");
-                        }
-                    }
+        Subcommand::Build => {
+            for (framework, build) in config.build.iter() {
+                println!("{framework:?} {} {}/{}", build.version, framework.owner(), framework.repo());
 
-                    let release = match version {
-                        Some(version) => {
-                            if version < Version::min_love_version() {
-                                return Err(anyhow::anyhow!("minimum supported love version is {}", Version::min_love_version()))
-                            }
-
-                            match releases.iter().find(|r| r.tag == version) {
-                                Some(release) => release,
-                                None => return Err(anyhow::anyhow!("release version {version} for love was not found"))
-                            }
-                        },
-                        None => releases.first().unwrap()
-                    };
-
-                    release.install("love").await?;
-                },
-                Package::Lovr { version } => {
-                    let releases = client.releases("bjornbytes", "lovr").await?;
-                    if list {
-                        println!("Lovr Versions");
-                        for version in releases.iter().map(|r| format!("{}", r.tag)) {
-                            println!(" - {version}");
-                        }
-                    }
-
-                    let release = match version {
-                        Some(version) => {
-                            if version < Version::min_lovr_version() {
-                                return Err(anyhow::anyhow!("minimum supported love version is {}", Version::min_love_version()))
-                            }
-
-                            match releases.iter().find(|r| r.tag == version) {
-                                Some(release) => release,
-                                None => return Err(anyhow::anyhow!("release version {version} for love was not found"))
-                            }
-                        },
-                        None => releases.first().unwrap()
-                    };
-
-                    release.install("lovr").await?;
-                }
+                Builder::new(framework, build, &config)
+                    .bundle(&client)
+                    .await?;
+            }
+        },
+        Subcommand::Run => {
+            let target = Target::default();
+            if let Some((key, _value)) = config.build.first_key_value() {
+                let exe = key.exe(target);
+                let output = std::process::Command::new(exe.display().to_string())
+                    .arg(std::env::current_dir().unwrap().join("src").display().to_string())
+                    .output()?;
+                std::process::exit(output.status.code().unwrap());
             }
         }
-        _ => {}
     }
 
     Ok(())

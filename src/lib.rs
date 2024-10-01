@@ -1,19 +1,24 @@
 use std::path::PathBuf;
 
-use git::Version;
 use spinoff::{spinners, Spinner, Color};
 
+mod version;
+
 pub mod git;
+pub mod config;
+pub mod build;
+
+pub use version::Version;
 
 lazy_static::lazy_static! {
     pub static ref DATA: PathBuf = dirs::data_local_dir().unwrap().join("love-build-tools");
 }
 
-pub fn love_exe_path() -> PathBuf {
+pub fn love_path() -> PathBuf {
     DATA.join(std::env::consts::OS).join("love")
 }
 
-pub fn lovr_exe_path() -> PathBuf {
+pub fn lovr_path() -> PathBuf {
     DATA.join(std::env::consts::OS).join("lovr")
 }
 

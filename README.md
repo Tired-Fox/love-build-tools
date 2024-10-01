@@ -15,6 +15,15 @@ The goal is not to add more on top of `love` but instead make it's workflow easi
 - Versioning and auto managing the love library install
 - Auto lsp setup and support using the `lua2d` addon
 
+## TODO
+
+- Run command
+- Include specific libs
+- Cross platform compilation
+- Custom icons
+- Spinners while building
+- Better error handling
+
 ___
 
 ## References
