@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 
@@ -55,11 +55,23 @@ pub struct Project {
     pub icon: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub enum Framework {
     Love,
     Lovr,
+}
+
+impl FromStr for Framework {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "love" => Ok(Self::Love),
+            "lovr" => Ok(Self::Lovr),
+            other => Err(format!("invalid framework: {other}"))
+        } 
+    }
 }
 
 impl std::fmt::Display for Framework {
@@ -97,6 +109,14 @@ impl Framework {
     }
 
     #[inline]
+    pub const fn latest(&self) -> Version {
+        match self {
+            Self::Love => Version::latest_love_version(),
+            Self::Lovr => Version::latest_lovr_version(),
+        }
+    }
+
+    #[inline]
     pub fn path(&self, target: Target) -> PathBuf {
         DATA.join(target.to_string()).join(self.to_string())
     }
@@ -104,6 +124,22 @@ impl Framework {
     #[inline]
     pub fn exe(&self, target: Target) -> PathBuf {
         self.path(target).join(format!("{self}.exe"))
+    }
+
+    #[inline]
+    pub fn sample(&self) -> &'static str {
+        match self {
+            Self::Love => indoc::indoc! {r#"
+                function love.draw()
+                    love.graphics.print("Hello World!", 400, 300)
+                end
+            "#},
+            Self::Lovr => indoc::indoc! {r#"
+                function lovr.draw(pass)
+                    pass:text("hello world", 0, 1.7, -3, 0.5)
+                end
+            "#},
+        }
     }
 }
 

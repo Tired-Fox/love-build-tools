@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.89"
 clap = { version = "4.5.18", features = ["derive"] }
+dialoguer = "0.11.0"
 dirs = "5.0.1"
+indoc = "2.0.5"
 lazy_static = "1.5.0"
 regex = "1.11.0"
 reqwest = { version = "0.12.8", features = ["blocking", "json"] }

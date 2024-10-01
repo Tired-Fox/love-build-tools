@@ -26,6 +26,22 @@ impl Version {
             patch: Some(0)
         }
     }
+
+    pub const fn latest_love_version() -> Version {
+        Version {
+            major: 11,
+            minor: 5,
+            patch: None,
+        }
+    }
+
+    pub const fn latest_lovr_version() -> Version {
+        Version {
+            major: 0,
+            minor: 17,
+            patch: Some(0)
+        }
+    }
 }
 
 impl std::fmt::Display for Version {

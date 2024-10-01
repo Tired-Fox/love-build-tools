@@ -1,0 +1,5 @@
+[project]
+name = "lovr-phong"
+
+[build.lovr]
+version = "0.17.0"
