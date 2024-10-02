@@ -1,16 +1,16 @@
 use std::path::PathBuf;
 
-use spinoff::{spinners, Spinner, Color};
+use spinoff::{spinners, Color, Spinner};
 
-mod version;
 mod progress;
+mod version;
 
-pub mod git;
-pub mod config;
 pub mod build;
+pub mod config;
+pub mod git;
 
-pub use version::Version;
 pub use progress::Progress;
+pub use version::Version;
 
 lazy_static::lazy_static! {
     pub static ref DATA: PathBuf = dirs::data_local_dir().unwrap().join("love-build-tools");
@@ -45,7 +45,7 @@ impl<T, E: std::fmt::Display> SpinnerError<T> for Result<T, E> {
         match self {
             Ok(v) => Some(v),
             Err(err) => {
-                spinner.fail(format!("{msg}\n  {err}")); 
+                spinner.fail(format!("{msg}\n  {err}"));
                 None
             }
         }
@@ -53,7 +53,7 @@ impl<T, E: std::fmt::Display> SpinnerError<T> for Result<T, E> {
 
     fn log_err_in_spin(self, spinner: &mut Progress, msg: impl std::fmt::Display) -> Self {
         if let Err(err) = self.as_ref() {
-            spinner.fail(format!("{msg}\n  {err}")); 
+            spinner.fail(format!("{msg}\n  {err}"));
         }
         self
     }

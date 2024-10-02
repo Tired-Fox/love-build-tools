@@ -1,9 +1,13 @@
-use spinoff::{spinners, Spinner, Color};
+use spinoff::{spinners, Color, Spinner};
 
 pub struct Progress(Spinner);
 impl Progress {
     pub fn new(msg: impl AsRef<str>) -> Self {
-        Self(Spinner::new(spinners::Dots, msg.as_ref().to_string(), Color::Yellow))
+        Self(Spinner::new(
+            spinners::Dots,
+            msg.as_ref().to_string(),
+            Color::Yellow,
+        ))
     }
 
     pub fn start() -> Self {

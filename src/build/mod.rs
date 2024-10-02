@@ -50,12 +50,14 @@ impl<'conf> Builder<'conf> {
             let mut fail = false;
 
             spinner.update(format!("{tag} installing {}", self.framework));
-            if self.ensure_framework_installed(client, &mut spinner)
+            if self
+                .ensure_framework_installed(client, &mut spinner)
                 .await
                 .ok_or_spin(
                     &mut spinner,
                     format!("[{target}] failed to install {}", self.framework),
-                ).is_none()
+                )
+                .is_none()
             {
                 fail = true;
             }
@@ -70,15 +72,20 @@ impl<'conf> Builder<'conf> {
             };
 
             spinner.update(format!("{tag} copying dynamic libraries"));
-            if self.copy_files(*target, &target_dir)
-                .ok_or_spin(&mut spinner, format!("{tag} failed to copy dynamic libraries"))
+            if self
+                .copy_files(*target, &target_dir)
+                .ok_or_spin(
+                    &mut spinner,
+                    format!("{tag} failed to copy dynamic libraries"),
+                )
                 .is_none()
             {
                 fail = true;
             }
 
             spinner.update(format!("{tag} compressing source and building executable"));
-            if self.build_executable(*target, &target_dir)
+            if self
+                .build_executable(*target, &target_dir)
                 .ok_or_spin(&mut spinner, format!("{tag} failed to build executable"))
                 .is_none()
             {
@@ -86,7 +93,8 @@ impl<'conf> Builder<'conf> {
             }
 
             spinner.update(format!("{tag} packaging the executable and it's libraries"));
-            if self.package(*target, &target_dir)
+            if self
+                .package(*target, &target_dir)
                 .ok_or_spin(&mut spinner, format!("{tag} failed to package final build"))
                 .is_none()
             {
@@ -103,7 +111,11 @@ impl<'conf> Builder<'conf> {
         Ok(())
     }
 
-    pub async fn ensure_framework_installed(&self, client: &Client, spinner: &mut Progress) -> anyhow::Result<()> {
+    pub async fn ensure_framework_installed(
+        &self,
+        client: &Client,
+        spinner: &mut Progress,
+    ) -> anyhow::Result<()> {
         // PERF: Caching / Auth / Parse from html
         let releases = client
             .releases(self.framework.owner(), self.framework.repo())

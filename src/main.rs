@@ -2,7 +2,7 @@ use clap::Parser;
 use lbt::{
     build::Builder,
     config::{Build, Config, Framework, Target},
-    git, Progress, Version,
+    git, Version,
 };
 
 #[derive(Parser)]

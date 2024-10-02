@@ -4,10 +4,10 @@ use reqwest::{IntoUrl, RequestBuilder};
 
 mod release;
 
-pub use release::{ Release, Author, Asset, AssetName, AssetType };
+pub use release::{Asset, AssetName, AssetType, Author, Release};
 
 pub struct Client {
-    user_agent: String
+    user_agent: String,
 }
 
 impl Client {
@@ -15,7 +15,7 @@ impl Client {
 
     pub fn new(user_agent: impl AsRef<str>) -> Self {
         Self {
-            user_agent: user_agent.as_ref().to_string()
+            user_agent: user_agent.as_ref().to_string(),
         }
     }
 
@@ -24,7 +24,11 @@ impl Client {
             format!(
                 "{}?{}",
                 url.into_url().unwrap(),
-                params.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(","),
+                params
+                    .iter()
+                    .map(|(k, v)| format!("{k}={v}"))
+                    .collect::<Vec<_>>()
+                    .join(","),
             )
         } else {
             url.into_url().unwrap().to_string()
@@ -37,8 +41,16 @@ impl Client {
             .header("Accept", "application/vnd.github+json")
     }
 
-    pub async fn releases(&self, owner: impl std::fmt::Display, repo: impl std::fmt::Display) -> anyhow::Result<Vec<Release>> {
-        Ok(self.get(format!("{}/repos/{owner}/{repo}/releases", Self::GITHUB_API), None)
+    pub async fn releases(
+        &self,
+        owner: impl std::fmt::Display,
+        repo: impl std::fmt::Display,
+    ) -> anyhow::Result<Vec<Release>> {
+        Ok(self
+            .get(
+                format!("{}/repos/{owner}/{repo}/releases", Self::GITHUB_API),
+                None,
+            )
             .send()
             .await?
             .json()

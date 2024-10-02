@@ -7,9 +7,9 @@ use crate::{Version, DATA};
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
     pub project: Project,
-    #[serde(default, skip_serializing_if="BTreeMap::is_empty")]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub build: BTreeMap<Framework, Build>,
-    #[serde(default, skip_serializing_if="BTreeMap::is_empty")]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub target: BTreeMap<Target, Settings>,
 }
 
@@ -51,7 +51,7 @@ pub struct Project {
     /// This is used when naming final executables and directories
     pub name: String,
     /// Icon to use when a more specific icon is not specified
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
 }
 
@@ -69,17 +69,21 @@ impl FromStr for Framework {
         match s {
             "love" => Ok(Self::Love),
             "lovr" => Ok(Self::Lovr),
-            other => Err(format!("invalid framework: {other}"))
-        } 
+            other => Err(format!("invalid framework: {other}")),
+        }
     }
 }
 
 impl std::fmt::Display for Framework {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Self::Love => "love",
-            Self::Lovr => "lovr",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Love => "love",
+                Self::Lovr => "lovr",
+            }
+        )
     }
 }
 
@@ -150,7 +154,7 @@ pub struct Build {
     /// Optional list of targets to build for.
     ///
     /// Defaults to only building for the current OS
-    #[serde(default, skip_serializing_if="Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub targets: Vec<Target>,
 }
 
@@ -161,39 +165,53 @@ pub enum Target {
     Macos,
     Linux,
     Ios,
-    Android
+    Android,
 }
 
 impl Default for Target {
     fn default() -> Self {
         #[cfg(target_os = "windows")]
-        { Self::Win64 }
+        {
+            Self::Win64
+        }
         #[cfg(target_os = "macos")]
-        { Self::Macos }
+        {
+            Self::Macos
+        }
         #[cfg(target_os = "linux")]
-        { Self::Linux }
+        {
+            Self::Linux
+        }
         #[cfg(target_os = "ios")]
-        { Self::Ios }
+        {
+            Self::Ios
+        }
         #[cfg(target_os = "android")]
-        { Self::Android }
+        {
+            Self::Android
+        }
     }
 }
 
 impl std::fmt::Display for Target {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Self::Win64 => "windows",
-            Self::Macos => "macos",
-            Self::Linux => "linux",
-            Self::Ios => "ios",
-            Self::Android => "android",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Win64 => "windows",
+                Self::Macos => "macos",
+                Self::Linux => "linux",
+                Self::Ios => "ios",
+                Self::Android => "android",
+            }
+        )
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Settings {
     /// Specific icon to use when building for the specific target (OS)
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
 }

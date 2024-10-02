@@ -2,7 +2,6 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version {
     pub major: usize,
@@ -23,7 +22,7 @@ impl Version {
         Version {
             major: 0,
             minor: 15,
-            patch: Some(0)
+            patch: Some(0),
         }
     }
 
@@ -39,25 +38,31 @@ impl Version {
         Version {
             major: 0,
             minor: 17,
-            patch: Some(0)
+            patch: Some(0),
         }
     }
 }
 
 impl std::fmt::Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.{}{}", self.major, self.minor, match self.patch {
-            Some(v) => format!(".{v}"),
-            None => String::new()
-        })
+        write!(
+            f,
+            "{}.{}{}",
+            self.major,
+            self.minor,
+            match self.patch {
+                Some(v) => format!(".{v}"),
+                None => String::new(),
+            }
+        )
     }
 }
 
 impl Serialize for Version {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: serde::Serializer {
-
+    where
+        S: serde::Serializer,
+    {
         serializer.serialize_str(self.to_string().as_str())
     }
 }
@@ -97,8 +102,8 @@ impl FromStr for Version {
                 .map_err(|v| v.to_string())?,
             patch: match parts.next() {
                 Some(patch) => Some(patch.parse::<usize>().map_err(|e| e.to_string())?),
-                None => None
-            }
+                None => None,
+            },
         })
     }
 }
