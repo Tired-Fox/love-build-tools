@@ -2,7 +2,7 @@ use clap::Parser;
 use lbt::{
     build::Builder,
     config::{Build, Config, Framework, Target},
-    git, Version,
+    git, Progress, Version,
 };
 
 #[derive(Parser)]
@@ -24,6 +24,7 @@ pub enum Subcommand {
         framework: Framework,
         version: Option<Version>,
     },
+    Pass,
 }
 
 #[tokio::main]
@@ -70,7 +71,11 @@ async fn main() -> anyhow::Result<()> {
             );
             std::fs::write(dir.join("lbt.toml"), toml::to_string_pretty(&config)?)?;
         }
-        Subcommand::New { name, framework, version } => {
+        Subcommand::New {
+            name,
+            framework,
+            version,
+        } => {
             let dir = std::env::current_dir()?.join(name);
 
             if dir.exists() {
@@ -89,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
             );
             std::fs::write(dir.join("lbt.toml"), toml::to_string_pretty(&config)?)?;
         }
+        _ => {}
     }
 
     Ok(())

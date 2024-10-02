@@ -1,14 +1,13 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use spinoff::{spinners, Color, Spinner};
 use zip::write::SimpleFileOptions;
 
 use crate::{
     config::{Build, Config, Framework, Target},
     git::Client,
 };
-use crate::SpinnerError;
+use crate::{Progress, SpinnerError};
 
 //      Ensure framework is installed for the specific version and target
 //      Copy needed files to build directory
@@ -46,11 +45,11 @@ impl<'conf> Builder<'conf> {
         };
 
         for target in targets {
-            let mut spinner = Spinner::new(spinners::Dots, "[{target}]", Color::Yellow);
+            let mut spinner = Progress::new(format!("[{target}]"));
             let tag = format!("[{}:{target}]", self.framework);
             let mut fail = false;
 
-            spinner.update_text(format!("{tag} installing {}", self.framework));
+            spinner.update(format!("{tag} installing {}", self.framework));
             if self.ensure_framework_installed(client, &mut spinner)
                 .await
                 .ok_or_spin(
@@ -61,7 +60,7 @@ impl<'conf> Builder<'conf> {
                 fail = true;
             }
 
-            spinner.update_text(format!("{tag} creating output directory"));
+            spinner.update(format!("{tag} creating output directory"));
             let target_dir = match self.output_dir(*target).ok_or_spin(
                 &mut spinner,
                 format!("[{target}] failed to create output directory"),
@@ -70,7 +69,7 @@ impl<'conf> Builder<'conf> {
                 None => continue,
             };
 
-            spinner.update_text(format!("{tag} copying dynamic libraries"));
+            spinner.update(format!("{tag} copying dynamic libraries"));
             if self.copy_files(*target, &target_dir)
                 .ok_or_spin(&mut spinner, format!("{tag} failed to copy dynamic libraries"))
                 .is_none()
@@ -78,7 +77,7 @@ impl<'conf> Builder<'conf> {
                 fail = true;
             }
 
-            spinner.update_text(format!("{tag} compressing source and building executable"));
+            spinner.update(format!("{tag} compressing source and building executable"));
             if self.build_executable(*target, &target_dir)
                 .ok_or_spin(&mut spinner, format!("{tag} failed to build executable"))
                 .is_none()
@@ -86,7 +85,7 @@ impl<'conf> Builder<'conf> {
                 fail = true;
             }
 
-            spinner.update_text(format!("{tag} packaging the executable and it's libraries"));
+            spinner.update(format!("{tag} packaging the executable and it's libraries"));
             if self.package(*target, &target_dir)
                 .ok_or_spin(&mut spinner, format!("{tag} failed to package final build"))
                 .is_none()
@@ -95,16 +94,16 @@ impl<'conf> Builder<'conf> {
             }
 
             if fail {
-                spinner.fail(format!("{tag} Build failed").as_str());
+                spinner.finish_fail(format!("{tag} Build failed").as_str());
             } else {
-                spinner.success(format!("{tag} Build finished").as_str());
+                spinner.finish_success(format!("{tag} Build finished").as_str());
             }
         }
 
         Ok(())
     }
 
-    pub async fn ensure_framework_installed(&self, client: &Client, spinner: &mut Spinner) -> anyhow::Result<()> {
+    pub async fn ensure_framework_installed(&self, client: &Client, spinner: &mut Progress) -> anyhow::Result<()> {
         // PERF: Caching / Auth / Parse from html
         let releases = client
             .releases(self.framework.owner(), self.framework.repo())

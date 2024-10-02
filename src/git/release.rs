@@ -2,9 +2,8 @@ use std::{fs::File, str::FromStr};
 
 use regex::Regex;
 use serde::Deserialize;
-use spinoff::{spinners, Color, Spinner};
 
-use crate::{SpinnerError, SpinnerPrint, Version, DATA};
+use crate::{Progress, SpinnerError, Version, DATA};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Asset {
@@ -94,7 +93,7 @@ impl Release {
     pub async fn install(
         &self,
         base_name: impl AsRef<str>,
-        spinner: &mut Spinner,
+        spinner: &mut Progress,
     ) -> anyhow::Result<()> {
         match self.get_platform_asset() {
             Some(asset) => {
@@ -117,7 +116,7 @@ impl Release {
 
                 if !zip_file.exists() {
                     work_done = true;
-                    spinner.update_text(format!(
+                    spinner.update(format!(
                         "installing `{}` for {}",
                         base_name.as_ref(),
                         std::env::consts::OS
@@ -151,7 +150,6 @@ impl Release {
                     if version == self.tag {
                         if work_done {
                             spinner.success(format!("Installed {} {}", name, self.tag).as_str());
-                            *spinner = Spinner::new(spinners::Dots, format!("Installed {} {}", name, self.tag), Color::Yellow);
                         }
                         return Ok(());
                     } else {
@@ -165,7 +163,7 @@ impl Release {
 
                 if zip_name.ends_with(".zip") {
                     work_done = true;
-                    spinner.update_text(format!(
+                    spinner.update(format!(
                         "unzipping `{}` for {}",
                         base_name.as_ref(),
                         std::env::consts::OS
@@ -200,7 +198,7 @@ impl Release {
                                     ),
                                 )?; // Create the directory.
                         } else {
-                            spinner.print(format!(" └ unzipped file {}", outpath.display()));
+                            spinner.log(format!(" └ unzipped file {}", outpath.display()));
 
                             // Create and copy the file contents to the output path.
                             let mut outfile = File::create(base.join(outpath.file_name().unwrap()))
@@ -243,11 +241,6 @@ impl Release {
 
                 if work_done {
                     spinner.success(format!("Installed {} {}", name, self.tag).as_str());
-                    *spinner = Spinner::new(
-                        spinners::Dots,
-                        format!("Installed {} {}", name, self.tag),
-                        Color::Yellow,
-                    );
                 }
             }
             None => {
