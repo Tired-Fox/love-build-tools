@@ -4,8 +4,8 @@
       ".addons"
     ],
     "addons": {
-      "lovr": {
-        "src": "lovr",
+      "love2d": {
+        "src": "love2d",
         "target": "lua_cats"
       }
     },

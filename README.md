@@ -18,11 +18,10 @@ The goal is not to add more on top of `love` but instead make it's workflow easi
 ## TODO
 
 - [x] Run command
-- [ ] Include specific libs
+- [x] Spinners while building
+- [x] Better error handling
 - [ ] Cross platform compilation
 - [ ] Custom icons
-- [ ] Spinners while building
-- [ ] Better error handling
 
 ___
 

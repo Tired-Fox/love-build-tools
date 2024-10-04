@@ -1,3 +1,3 @@
 function lovr.draw(pass)
-	pass:text("hello world", 0, 1.7, -3, 0.5)
+	pass:cube(0, 1.7, -2, 1, lovr.timer.getTime())
 end

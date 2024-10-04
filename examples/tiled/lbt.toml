@@ -1,0 +1,5 @@
+[project]
+name = "examples"
+
+[build.love]
+version = "11.5"
