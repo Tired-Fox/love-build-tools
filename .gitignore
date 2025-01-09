@@ -1,3 +1,5 @@
 /target
 **/.addons
 examples/**/build
+**/.love
+**/.lovr

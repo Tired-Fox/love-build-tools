@@ -12,16 +12,16 @@ pub mod git;
 pub use progress::Progress;
 pub use version::Version;
 
-lazy_static::lazy_static! {
-    pub static ref DATA: PathBuf = dirs::data_local_dir().unwrap().join("love-build-tools");
+pub fn data_dir() -> PathBuf {
+    dirs::data_local_dir().unwrap().join("love-build-tools")
 }
 
 pub fn love_path() -> PathBuf {
-    DATA.join(std::env::consts::OS).join("love")
+    data_dir().join(std::env::consts::OS).join("love")
 }
 
 pub fn lovr_path() -> PathBuf {
-    DATA.join(std::env::consts::OS).join("lovr")
+    data_dir().join(std::env::consts::OS).join("lovr")
 }
 
 pub trait SpinnerPrint {

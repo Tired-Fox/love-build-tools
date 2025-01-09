@@ -1,13 +1,15 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use zip::write::SimpleFileOptions;
 
+use crate::config::{Config, Settings};
 use crate::{
-    config::{Build, Config, Framework, Target},
+    config::{Build, Framework, Arch},
     git::Client,
 };
-use crate::{Progress, SpinnerError};
+use crate::{Progress, SpinnerError, Version};
 
 //      Ensure framework is installed for the specific version and target
 //      Copy needed files to build directory
@@ -22,31 +24,31 @@ use crate::{Progress, SpinnerError};
 /// Builds the project based on the framework and build settings
 pub struct Builder<'conf> {
     root: PathBuf,
-    config: &'conf Config,
+    config: &'conf Build,
     framework: &'conf Framework,
-    build: &'conf Build,
+    settings: &'conf Settings,
 }
 
 impl<'conf> Builder<'conf> {
-    pub fn new(framework: &'conf Framework, build: &'conf Build, config: &'conf Config) -> Self {
+    pub fn new(framework: &'conf Framework, settings: &'conf Settings, config: &'conf Build) -> Self {
         Self {
             root: std::env::current_dir().unwrap(),
             framework,
-            build,
+            settings,
             config,
         }
     }
 
     pub async fn bundle(&self, client: &Client) -> anyhow::Result<()> {
-        let targets = if self.build.targets.is_empty() {
-            &[Target::default()]
+        let architectures = if self.settings.targets.is_empty() {
+            &[Arch::default()]
         } else {
-            self.build.targets.as_slice()
+            self.settings.targets.as_slice()
         };
 
-        for target in targets {
-            let mut spinner = Progress::new(format!("[{target}]"));
-            let tag = format!("[{}:{target}]", self.framework);
+        for arch in architectures {
+            let mut spinner = Progress::new(format!("[{arch}]"));
+            let tag = format!("[{}:{arch}]", self.framework);
             let mut fail = false;
 
             spinner.update(format!("{tag} installing {}", self.framework));
@@ -55,7 +57,7 @@ impl<'conf> Builder<'conf> {
                 .await
                 .ok_or_spin(
                     &mut spinner,
-                    format!("[{target}] failed to install {}", self.framework),
+                    format!("[{arch}] failed to install {}", self.framework),
                 )
                 .is_none()
             {
@@ -63,9 +65,9 @@ impl<'conf> Builder<'conf> {
             }
 
             spinner.update(format!("{tag} creating output directory"));
-            let target_dir = match self.output_dir(*target).ok_or_spin(
+            let target_dir = match self.output_dir(*arch).ok_or_spin(
                 &mut spinner,
-                format!("[{target}] failed to create output directory"),
+                format!("[{arch}] failed to create output directory"),
             ) {
                 Some(td) => td,
                 None => continue,
@@ -73,7 +75,7 @@ impl<'conf> Builder<'conf> {
 
             spinner.update(format!("{tag} copying dynamic libraries"));
             if self
-                .copy_files(*target, &target_dir)
+                .copy_files(*arch, &target_dir)
                 .ok_or_spin(
                     &mut spinner,
                     format!("{tag} failed to copy dynamic libraries"),
@@ -83,18 +85,24 @@ impl<'conf> Builder<'conf> {
                 fail = true;
             }
 
+            let dist_name = setup_dist(self.framework, self.settings, self.config)?;
+
             spinner.update(format!("{tag} compressing source and building executable"));
             if self
-                .build_executable(*target, &target_dir)
+                .build_executable(*arch, &target_dir, &dist_name)
                 .ok_or_spin(&mut spinner, format!("{tag} failed to build executable"))
                 .is_none()
             {
                 fail = true;
             }
 
+            if PathBuf::from(&dist_name).exists() {
+                std::fs::remove_dir_all(&dist_name)?;
+            }
+
             spinner.update(format!("{tag} packaging the executable and it's libraries"));
             if self
-                .package(*target, &target_dir)
+                .package(*arch, &target_dir)
                 .ok_or_spin(&mut spinner, format!("{tag} failed to package final build"))
                 .is_none()
             {
@@ -117,32 +125,44 @@ impl<'conf> Builder<'conf> {
         spinner: &mut Progress,
     ) -> anyhow::Result<()> {
         // PERF: Caching / Auth / Parse from html
-        let releases = client
-            .releases(self.framework.owner(), self.framework.repo())
+        let tags = client
+            .tags(self.framework.owner(), self.framework.repo())
             .await?;
 
-        if self.build.version < self.framework.min_version() {
-            return Err(anyhow::anyhow!(
+        if self.settings.version < self.framework.min_version() {
+            anyhow::bail!(
                 "minimum supported love version is {}",
                 self.framework.min_version()
-            ));
+            );
         }
 
-        let release = match releases.iter().find(|r| r.tag == self.build.version) {
-            Some(release) => release,
+        let tag = match tags.iter().find(|t| {
+            if let Ok(version) = Version::from_str(&t.name) {
+                version == self.settings.version
+            } else {
+                false
+            }
+        }) {
+            Some(tag) => tag,
             None => {
-                return Err(anyhow::anyhow!(
+                anyhow::bail!(
                     "release version {} for {} was not found",
-                    self.build.version,
+                    self.settings.version,
                     self.framework
-                ))
+                )
             }
         };
 
-        release.install(self.framework.to_string(), spinner).await
+        client.install_by_tag(
+            self.framework.owner(),
+            self.framework.repo(),
+            tag,
+            self.framework.to_string(),
+            spinner
+        ).await
     }
 
-    pub fn output_dir(&self, target: Target) -> anyhow::Result<PathBuf> {
+    pub fn output_dir(&self, target: Arch) -> anyhow::Result<PathBuf> {
         let target_dir = self
             .root
             .join("build")
@@ -157,24 +177,23 @@ impl<'conf> Builder<'conf> {
         Ok(target_dir)
     }
 
-    pub fn copy_files(&self, target: Target, dest: &Path) -> anyhow::Result<()> {
+    pub fn copy_files(&self, target: Arch, dest: &Path) -> anyhow::Result<()> {
         for entry in std::fs::read_dir(self.framework.path(target))?.flatten() {
-            if let Some("dll") = entry.path().extension().and_then(|v| v.to_str()) {
-                std::fs::copy(entry.path(), dest.join(entry.path().file_name().unwrap()))?;
-            }
+            std::fs::copy(entry.path(), dest.join(entry.path().file_name().unwrap()))?;
         }
 
         Ok(())
     }
 
-    pub fn build_executable(&self, target: Target, dest: &Path) -> anyhow::Result<()> {
-        let exe = dest.join(format!("{}.exe", self.config.project.name));
-        let compressed = format!("{}.{}", self.config.project.name, self.framework);
+    pub fn build_executable(&self, target: Arch, dest: &Path, source: impl AsRef<Path>) -> anyhow::Result<()> {
+        let source = source.as_ref();
+        let exe = dest.join(format!("{}.exe", self.config.name));
+        let compressed = format!("{}.{}", self.config.name, self.framework);
         // Build based on target
         match target {
-            Target::Win64 => {
-                let mut archive = Archive::new(self.root.join("src"), dest.join(&compressed))?;
-                archive.add_dir(&self.root.join("src"), true)?;
+            Arch::Win64 => {
+                let mut archive = Archive::new(self.root.join(source), dest.join(&compressed))?;
+                archive.add_dir(&self.root.join(source), true)?;
                 archive.finish()?;
 
                 std::fs::copy(self.framework.exe(target), &exe)?;
@@ -190,11 +209,11 @@ impl<'conf> Builder<'conf> {
         Ok(())
     }
 
-    pub fn apply_customizations(&self, target: Target, _dest: &Path) -> anyhow::Result<()> {
+    pub fn apply_customizations(&self, target: Arch, _dest: &Path) -> anyhow::Result<()> {
         // TODO: If custom icon then apply that to executable
         match target {
             // Can only manipulate icon when on windows
-            Target::Win64 if std::env::consts::OS == "windows" => {
+            Arch::Win64 if std::env::consts::OS == "windows" => {
                 // TODO: Use win32 api to update exe ico
                 // - https://stackoverflow.com/q/67691200
                 // - Image png to ico: https://docs.rs/ico/latest/ico/
@@ -207,11 +226,11 @@ impl<'conf> Builder<'conf> {
         Ok(())
     }
 
-    pub fn package(&self, target: Target, dest: &Path) -> anyhow::Result<()> {
+    pub fn package(&self, target: Arch, dest: &Path) -> anyhow::Result<()> {
         match target {
-            Target::Win64 => {
+            Arch::Win64 => {
                 let mut archive =
-                    Archive::new(dest, dest.join(format!("{}.zip", self.config.project.name)))?;
+                    Archive::new(dest, dest.join(format!("{}.zip", self.config.name)))?;
                 archive.add_dir(dest, false)?;
                 archive.finish()?;
             }
@@ -294,4 +313,56 @@ impl Archive {
     pub fn finish(self) -> anyhow::Result<std::fs::File> {
         Ok(self.writer.finish()?)
     }
+}
+
+pub fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>, recursive: bool, exclude: &[PathBuf]) -> std::io::Result<()> {
+    let from = from.as_ref();
+    let to = to.as_ref();
+
+    if exclude.contains(&from.to_path_buf()) {
+        return Ok(())
+    }
+    
+    if from.is_dir() {
+        if !to.exists() {
+            std::fs::create_dir_all(to)?;
+        }
+
+        if recursive {
+            // Collect all nested paths and check if they are excluded
+            for path in std::fs::read_dir(from)?.flatten() {
+                copy(path.path(), to.join(path.file_name()), recursive, exclude)?;
+            }
+        }
+    } else {
+        std::fs::copy(from, to)?;
+    }
+
+    Ok(())
+}
+
+pub fn setup_dist(framework: &Framework, settings: &Settings, config: &Build) -> anyhow::Result<String> {
+    let dist_name = format!(".{}", framework);
+    let dist = PathBuf::from(&dist_name);
+    if !dist.exists() {
+        std::fs::create_dir_all(&dist)?;
+    }
+
+    let entry = PathBuf::from(settings.entry.as_deref().unwrap_or("src/main.lua"));
+    let conf = PathBuf::from("src/conf.lua");
+
+    copy("src", &dist_name, true, &[entry.clone(), conf.clone()])?;
+
+    if conf.exists() {
+        std::fs::copy(&conf, format!("{dist_name}/conf.lua"))?;
+    } else if let Some(cfg) = config.config.as_ref() {
+        let conf = format!("function love.conf({})\n{}end", Config::param(), cfg);
+        std::fs::write(dist.join("conf.lua"), conf)?;
+    }
+
+    if entry.exists() {
+        std::fs::copy(&entry, format!("{dist_name}/main.lua"))?;
+    }
+
+    Ok(dist_name)
 }

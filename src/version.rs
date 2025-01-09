@@ -2,11 +2,19 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, Eq, PartialOrd, Ord)]
 pub struct Version {
     pub major: usize,
     pub minor: usize,
     pub patch: Option<usize>,
+}
+
+impl PartialEq for Version {
+    fn eq(&self, other: &Self) -> bool {
+        self.major == other.major
+            && self.minor == other.minor
+            && self.patch.unwrap_or_default() == other.patch.unwrap_or_default()
+    }
 }
 
 impl Version {
@@ -87,7 +95,11 @@ impl FromStr for Version {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.splitn(3, '.');
+        let mut parts = if s.starts_with('v') {
+            s[1..].splitn(3, '.')
+        } else {
+            s.splitn(3, '.')
+        };
 
         Ok(Self {
             major: parts
