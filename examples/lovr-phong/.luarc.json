@@ -9,5 +9,13 @@
         "target": "lua_cats"
       }
     }
+  },
+  "build": {
+    "name": "lovr-phong",
+    "targets": {
+      "lovr": {
+        "version": "0.17.0"
+      }
+    }
   }
 }

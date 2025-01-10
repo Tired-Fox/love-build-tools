@@ -10,5 +10,13 @@
       }
     },
     "useGitIgnore": false
+  },
+  "build": {
+    "name": "tiled",
+    "targets": {
+      "love": {
+        "version": "11.5"
+      }
+    }
   }
 }

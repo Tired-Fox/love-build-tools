@@ -10,5 +10,13 @@
       }
     },
     "useGitIgnore": false
+  },
+  "build": {
+    "name": "Spinning Cubes",
+    "targets": {
+      "lovr": {
+        "version": "0.17.0"
+      }
+    }
   }
 }
