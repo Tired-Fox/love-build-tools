@@ -1,0 +1,26 @@
+[package]
+name = "love-build-tools"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "lov"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.89"
+dirs = "6.0.0"
+indoc = "2.0.5"
+regex = "1.11.0"
+strum = { version = "0.27.1", features = ["strum_macros", "derive"] }
+zip = "4.0.0"
+
+tokio = { version = "1.40.0", features = ["macros", "process", "rt-multi-thread"] }
+reqwest = { version = "0.12.8", features = ["blocking", "json"] }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+clap = { version = "4.5.18", features = ["derive"] }
+
+spinoff = "0.8.0"
+dialoguer = "0.11.0"
+notify = "8.0.0"
