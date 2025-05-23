@@ -1,0 +1,21 @@
+[package]
+name = "love-build-tools"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "lov"
+path = "src/main.rs"
+
+[dependencies]
+love-version-manager = { version = "0.1.0", path = "../version-manager" }
+lua-language-addon-manager = { version = "0.1.0", path = "../addon-manager" }
+
+anyhow = "1.0.98"
+tokio = { version = "1.45.0", features = ["macros", "rt-multi-thread"] }
+serde = { version = "1.0.219", features = ["derive"] }
+toml = "0.8.22"
+clap = { version = "4.5.38", features = ["derive"] }
+indoc = "2.0.6"
+ignore = "0.4.23"
+zip = "4.0.0"

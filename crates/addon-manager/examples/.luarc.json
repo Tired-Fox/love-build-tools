@@ -1,0 +1,21 @@
+{
+  "workspace": {
+    "userThirdParty": [
+      ".addons"
+    ],
+    "addons": {
+      "love2d": {
+        "domain": "github.com",
+        "host": "LuaCATS",
+        "repository": "love2d",
+        "hash": "765abafe49775ba52937430e2546dfc330381d6b"
+      },
+      "lovr": {
+        "domain": "github.com",
+        "host": "LuaCATS",
+        "repository": "lovr",
+        "hash": "3aa8c53b100b9d04e6b26aa00f9926eeebbf5cae"
+      }
+    }
+  }
+}

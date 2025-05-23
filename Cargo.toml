@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/love-version-manager",
-    "crates/love-build-tools",
+    "crates/version-manager",
+    "crates/build-tools",
+    "crates/addon-manager",
+    "crates/luarc",
 ]

@@ -1,0 +1,11 @@
+{
+    "workspace": {
+        "checkThirdParty": "Apply",
+        "addons": {
+            "luv": {
+                "src": "luv",
+                "target": "lua-cats"
+            }
+        }
+    }
+}
