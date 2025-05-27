@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize)]
 pub struct Config {
     pub name: String,
+    pub id: String,
     pub version: String,
 
     #[serde(
@@ -28,6 +29,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             name: Default::default(),
+            id: Default::default(),
             version: Default::default(),
             target: Self::default_targets(),
             love_version: Default::default(),
@@ -38,9 +40,14 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn new(name: impl std::fmt::Display, version: impl std::fmt::Display) -> Self {
+    pub fn new(
+        name: impl std::fmt::Display,
+        id: impl std::fmt::Display,
+        version: impl std::fmt::Display
+    ) -> Self {
         Self {
             name: name.to_string(),
+            id: id.to_string(),
             version: version.to_string(),
             ..Default::default()
         }

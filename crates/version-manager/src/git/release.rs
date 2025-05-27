@@ -68,7 +68,7 @@ pub struct Tag {
     pub zipball_url: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, strum::EnumIs, strum::Display, strum::VariantNames, strum::AsRefStr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, strum::EnumIs, strum::Display, strum::VariantNames, strum::AsRefStr)]
 #[strum(serialize_all="camelCase")]
 #[serde(rename_all="camelCase")]
 pub enum AssetType {

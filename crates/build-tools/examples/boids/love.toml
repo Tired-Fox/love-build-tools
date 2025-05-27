@@ -1,3 +1,4 @@
 name = "boids"
+id = "com.LoveBuildTools.boids"
 version = "0.1.0"
 target = ["win64"]

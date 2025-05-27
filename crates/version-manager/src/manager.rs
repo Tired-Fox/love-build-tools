@@ -38,20 +38,20 @@ impl Manager {
 
     pub fn bundles(target: impl AsRef<str>) -> anyhow::Result<Vec<AssetType>> {
         let base_path = dirs::data_dir().unwrap().join("love-version-manager").join(target.as_ref());
-        base_path
+        Ok(base_path
             .read_dir()?
             .flatten()
-            .map(|d| {
+            .filter_map(|d| {
                 let name = d.path().file_name().unwrap().to_string_lossy().to_string();
                 if name == "linux.AppImage" {
-                    Ok(AssetType::Linux)
+                    Some(AssetType::Linux)
                 } else if name == "android.apk" {
-                    Ok(AssetType::Android)
+                    Some(AssetType::Android)
                 } else {
-                    Ok(AssetType::from_str(&name).map_err(anyhow::Error::msg)?)
+                    AssetType::from_str(&name).ok()
                 }
             })
-            .collect::<anyhow::Result<Vec<_>>>()
+            .collect::<Vec<_>>())
     }
 
     pub fn bundle_path(version: impl AsRef<str>, target: AssetType) -> PathBuf {
